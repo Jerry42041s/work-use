@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ─── 主選單 ─── -->
+    <menuitem id="menu_dobtor_doc_root"
+              name="文件編輯器"
+              sequence="95"
+              groups="dobtor_doc_editor.group_doc_editor"/>
+
+    <!-- ─── 我的文件 ─── -->
+    <menuitem id="menu_doc_documents"
+              name="我的文件"
+              parent="menu_dobtor_doc_root"
+              action="action_doc_document_list"
+              sequence="10"
+              groups="dobtor_doc_editor.group_doc_editor"/>
+
+    <!-- ─── 文件範本（僅管理者可見） ─── -->
+    <menuitem id="menu_doc_templates"
+              name="文件範本"
+              parent="menu_dobtor_doc_root"
+              action="action_doc_template_list"
+              sequence="20"
+              groups="dobtor_doc_editor.group_doc_manager"/>
+</odoo>

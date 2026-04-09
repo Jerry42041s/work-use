@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- 預設空白範本 -->
+        <record id="doc_template_blank" model="doc.template">
+            <field name="name">空白文件</field>
+            <field name="category">general</field>
+            <field name="page_format">A4</field>
+            <field name="description">空白 A4 文件範本</field>
+            <field name="content_html"><![CDATA[<p><br></p>]]></field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- 使用者只能讀/寫自己建立的或被加為協作者的文件 -->
+        <record id="rule_doc_document_owner_or_collab" model="ir.rule">
+            <field name="name">doc.document：擁有者或協作者</field>
+            <field name="model_id" ref="model_doc_document"/>
+            <field name="domain_force">[
+                '|',
+                ('create_uid', '=', user.id),
+                ('collaborator_ids', 'in', [user.id])
+            ]</field>
+            <field name="groups" eval="[(4, ref('dobtor_doc_editor.group_doc_editor'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!-- 管理者可存取所有文件 -->
+        <record id="rule_doc_document_manager_all" model="ir.rule">
+            <field name="name">doc.document：管理者完整存取</field>
+            <field name="model_id" ref="model_doc_document"/>
+            <field name="domain_force">[(1, '=', 1)]</field>
+            <field name="groups" eval="[(4, ref('dobtor_doc_editor.group_doc_manager'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+
+        <!-- 多公司隔離 -->
+        <record id="rule_doc_document_company" model="ir.rule">
+            <field name="name">doc.document：公司隔離</field>
+            <field name="model_id" ref="model_doc_document"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="groups" eval="[(4, ref('dobtor_doc_editor.group_doc_editor'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="True"/>
+            <field name="perm_create" eval="True"/>
+            <field name="perm_unlink" eval="True"/>
+        </record>
+    </data>
+</odoo>

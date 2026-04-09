@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="dobtor_doc_editor.DocEditor">
+        <div class="o_action o_dobtor_doc_editor">
+
+            <!-- ── 頂部工具列 ── -->
+            <div class="doc-toolbar">
+                <!-- 文件標題 -->
+                <input class="doc-toolbar-title"
+                       t-att-value="state.docName"
+                       t-on-change="onTitleChange"
+                       placeholder="未命名文件"/>
+
+                <div class="doc-toolbar-sep"/>
+
+                <!-- 頁面格式 -->
+                <select class="doc-toolbar-select"
+                        t-att-value="state.pageFormat"
+                        t-on-change="onPageFormatChange">
+                    <option value="A4">A4</option>
+                    <option value="A3">A3</option>
+                    <option value="A5">A5</option>
+                    <option value="letter">Letter</option>
+                    <option value="legal">Legal</option>
+                </select>
+
+                <div class="doc-toolbar-sep"/>
+
+                <!-- 儲存 -->
+                <button class="doc-toolbar-btn primary"
+                        t-att-class="state.isSaving ? 'saving' : ''"
+                        t-on-click="onSave"
+                        t-att-disabled="state.isSaving">
+                    <i class="fa fa-save"/>
+                    <span t-if="state.isSaving">儲存中...</span>
+                    <span t-else="">儲存</span>
+                </button>
+
+                <!-- 版本快照 -->
+                <button class="doc-toolbar-btn"
+                        t-on-click="onSaveVersion"
+                        title="儲存版本快照">
+                    <i class="fa fa-history"/>
+                </button>
+
+                <div class="doc-toolbar-sep"/>
+
+                <!-- PDF -->
+                <button class="doc-toolbar-btn"
+                        t-on-click="() => this.onExport('pdf')">
+                    <i class="fa fa-file-pdf-o"/>
+                    PDF
+                </button>
+
+                <!-- DOCX 高品質 -->
+                <button class="doc-toolbar-btn"
+                        t-on-click="() => this.onExport('docx', 'high')">
+                    <i class="fa fa-file-word-o"/>
+                    DOCX
+                </button>
+
+                <div class="doc-toolbar-sep"/>
+
+                <!-- 匯入 -->
+                <button class="doc-toolbar-btn"
+                        t-on-click="onImportClick"
+                        title="匯入 DOCX / ODT">
+                    <i class="fa fa-upload"/>
+                    匯入
+                </button>
+
+                <div class="doc-toolbar-sep"/>
+
+                <!-- 縮放 -->
+                <select class="doc-toolbar-select"
+                        title="縮放比例"
+                        t-on-change="onZoomChange">
+                    <option value="0.5">50%</option>
+                    <option value="0.75">75%</option>
+                    <option value="1" selected="">100%</option>
+                    <option value="1.25">125%</option>
+                    <option value="1.5">150%</option>
+                    <option value="2">200%</option>
+                </select>
+
+                <div class="doc-toolbar-sep"/>
+
+                <!-- 離線提示 -->
+                <t t-if="offlineBadge">
+                    <span class="doc-toolbar-offline-badge">
+                        <i class="fa fa-wifi"/> 離線
+                    </span>
+                    <div class="doc-toolbar-sep"/>
+                </t>
+
+                <!-- 關閉 -->
+                <button class="doc-toolbar-btn"
+                        t-on-click="onClose">
+                    <i class="fa fa-times"/>
+                    關閉
+                </button>
+            </div>
+
+            <!-- ── 尺規 ── -->
+            <DocRuler t-if="state.editorReady"
+                      pageWidthMm="pageWidthMm"/>
+
+            <!-- ── 工作區（可捲動） ── -->
+            <div class="doc-workspace">
+                <div class="doc-workspace-zoom"
+                     t-att-style="'zoom: ' + state.zoom + '; transform-origin: top center;'">
+                <t t-if="state.editorReady">
+                    <DocPageLayout
+                        pageFormat="state.pageFormat"
+                        marginTop="state.marginTop"
+                        marginBottom="state.marginBottom"
+                        marginLeft="state.marginLeft"
+                        marginRight="state.marginRight"
+                        headerHtml="state.headerHtml"
+                        footerHtml="state.footerHtml"
+                        editorConfig="state.editorConfig"
+                        onHeaderChange="(html) => this.onHeaderChange(html)"
+                        onFooterChange="(html) => this.onFooterChange(html)"
+                    />
+                </t>
+                <t t-else="">
+                    <div class="d-flex justify-content-center align-items-center py-5">
+                        <i class="fa fa-spinner fa-spin fa-2x text-muted"/>
+                        <span class="ms-3 text-muted">載入中...</span>
+                    </div>
+                </t>
+                </div><!-- end doc-workspace-zoom -->
+            </div>
+
+            <!-- ── 狀態列 ── -->
+            <div class="doc-statusbar">
+                <span>
+                    <t t-if="state.docId">文件 ID: <t t-esc="state.docId"/></t>
+                </span>
+                <span t-att-class="statusClass">
+                    <t t-esc="state.statusMsg"/>
+                </span>
+                <span>
+                    <t t-esc="state.pageFormat"/>
+                    <t t-if="state.modelName"> · <t t-esc="state.modelName"/></t>
+                </span>
+            </div>
+
+        </div>
+    </t>
+</templates>

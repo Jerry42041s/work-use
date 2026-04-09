@@ -1,0 +1,8 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_doc_document_editor,doc.document editor,model_doc_document,dobtor_doc_editor.group_doc_editor,1,1,1,0
+access_doc_document_manager,doc.document manager,model_doc_document,dobtor_doc_editor.group_doc_manager,1,1,1,1
+access_doc_template_editor,doc.template editor,model_doc_template,dobtor_doc_editor.group_doc_editor,1,0,0,0
+access_doc_template_manager,doc.template manager,model_doc_template,dobtor_doc_editor.group_doc_manager,1,1,1,1
+access_doc_render_mixin_user,doc.render.mixin user,model_doc_render_mixin,base.group_user,1,0,0,0
+access_doc_sanitizer_user,doc.sanitizer user,model_doc_sanitizer,base.group_user,1,0,0,0
+access_doc_field_picker_wizard_user,doc.field.picker.wizard user,model_doc_field_picker_wizard,dobtor_doc_editor.group_doc_editor,1,1,1,1

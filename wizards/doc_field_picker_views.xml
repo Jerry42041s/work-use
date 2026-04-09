@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <record id="view_doc_field_picker_form" model="ir.ui.view">
+        <field name="name">doc.field.picker.wizard.form</field>
+        <field name="model">doc.field.picker.wizard</field>
+        <field name="arch" type="xml">
+            <form string="選擇欄位">
+                <group>
+                    <field name="document_id" invisible="1"/>
+                    <field name="model_id" readonly="1" string="目標模型"/>
+                    <field name="selected_field_id" string="選擇欄位"/>
+                    <field name="expression_preview" readonly="1" string="運算式"/>
+                </group>
+                <footer>
+                    <button name="action_copy_and_close" type="object"
+                            string="確認" class="btn-primary"/>
+                    <button string="取消" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_doc_field_picker_wizard" model="ir.actions.act_window">
+        <field name="name">欄位選擇器</field>
+        <field name="res_model">doc.field.picker.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

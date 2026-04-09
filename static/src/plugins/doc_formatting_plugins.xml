@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <!-- ── 字型選擇器（Dropdown + DropdownItem，與 Odoo FontSelector 相同模式） ── -->
+    <t t-name="dobtor_doc_editor.FontFamilySelector">
+        <Dropdown>
+            <button class="btn btn-light btn-sm doc-toolbar-dropdown-btn"
+                    t-att-title="props.title">
+                <span class="px-1" t-esc="state.displayName"/>
+                <i class="fa fa-caret-down ms-1"/>
+            </button>
+            <t t-set-slot="content">
+                <t t-foreach="items" t-as="item" t-key="item_index">
+                    <DropdownItem
+                        onSelected="() => this.onSelected(item)"
+                        t-on-pointerdown.prevent="() => {}">
+                        <span t-att-style="item.value ? 'font-family:' + item.value : ''"
+                              t-esc="item.name"/>
+                    </DropdownItem>
+                </t>
+            </t>
+        </Dropdown>
+    </t>
+
+    <!-- ── 行高選擇器（Dropdown + DropdownItem） ── -->
+    <t t-name="dobtor_doc_editor.LineHeightSelector">
+        <Dropdown>
+            <button class="btn btn-light btn-sm doc-toolbar-dropdown-btn"
+                    t-att-title="props.title">
+                <i class="fa fa-text-height me-1"/>
+                <span class="px-1" t-esc="state.displayName"/>
+                <i class="fa fa-caret-down ms-1"/>
+            </button>
+            <t t-set-slot="content">
+                <t t-foreach="items" t-as="item" t-key="item_index">
+                    <DropdownItem
+                        onSelected="() => this.onSelected(item)"
+                        t-on-pointerdown.prevent="() => {}">
+                        <t t-esc="item.name"/>
+                    </DropdownItem>
+                </t>
+            </t>
+        </Dropdown>
+    </t>
+
+</templates>

@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- ─── ir.actions.client：文件編輯器（全螢幕） ─── -->
+    <record id="action_doc_editor_client" model="ir.actions.client">
+        <field name="name">文件編輯器</field>
+        <field name="tag">dobtor_doc_editor.action_doc_editor</field>
+        <field name="target">fullscreen</field>
+    </record>
+
+    <!-- ─── 文件列表 Action ─── -->
+    <record id="action_doc_document_list" model="ir.actions.act_window">
+        <field name="name">我的文件</field>
+        <field name="res_model">doc.document</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_my_docs': 1}</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                建立第一份文件
+            </p>
+            <p>
+                點擊「新增」建立文件，使用全功能編輯器進行排版。
+            </p>
+        </field>
+    </record>
+
+    <!-- ─── 文件列表 View ─── -->
+    <record id="view_doc_document_list" model="ir.ui.view">
+        <field name="name">doc.document.list</field>
+        <field name="model">doc.document</field>
+        <field name="arch" type="xml">
+            <list string="文件" default_order="write_date desc">
+                <field name="name"/>
+                <field name="model_id" optional="show"/>
+                <field name="page_format" optional="show"/>
+                <field name="company_id" groups="base.group_multi_company" optional="show"/>
+                <field name="create_uid" optional="show"/>
+                <field name="write_date" string="最後修改"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ─── 文件表單 View ─── -->
+    <record id="view_doc_document_form" model="ir.ui.view">
+        <field name="name">doc.document.form</field>
+        <field name="model">doc.document</field>
+        <field name="arch" type="xml">
+            <form string="文件">
+                <header>
+                    <button name="action_open_editor"
+                            string="開啟編輯器"
+                            type="object"
+                            class="btn-primary"
+                            icon="fa-edit"/>
+                    <button name="action_export_pdf"
+                            string="匯出 PDF"
+                            type="object"
+                            icon="fa-file-pdf-o"/>
+                    <button name="action_export_docx"
+                            string="匯出 DOCX"
+                            type="object"
+                            icon="fa-file-word-o"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="文件名稱" required="1"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="文件設定">
+                            <field name="model_id"
+                                   string="關聯模型"
+                                   help="選擇此文件使用的 Odoo 模型，以便插入欄位變數"/>
+                            <field name="template_id"
+                                   string="使用範本"
+                                   domain="[('model_id', '=', model_id)]"/>
+                            <field name="page_format" string="頁面格式"/>
+                        </group>
+                        <group string="頁面邊距 (px)">
+                            <field name="margin_top" string="上"/>
+                            <field name="margin_bottom" string="下"/>
+                            <field name="margin_left" string="左"/>
+                            <field name="margin_right" string="右"/>
+                        </group>
+                    </group>
+                    <group string="協作者">
+                        <field name="collaborator_ids"
+                               widget="many2many_tags"
+                               string="協作者"
+                               help="加入的協作者可以讀取和編輯此文件"/>
+                    </group>
+                    <group>
+                        <field name="company_id"
+                               groups="base.group_multi_company"
+                               string="所屬公司"/>
+                    </group>
+                </sheet>
+                <chatter>
+                    <field name="message_follower_ids"/>
+                    <field name="activity_ids"/>
+                    <field name="message_ids"/>
+                </chatter>
+            </form>
+        </field>
+    </record>
+
+    <!-- ─── 搜尋 View ─── -->
+    <record id="view_doc_document_search" model="ir.ui.view">
+        <field name="name">doc.document.search</field>
+        <field name="model">doc.document</field>
+        <field name="arch" type="xml">
+            <search string="搜尋文件">
+                <field name="name" string="文件名稱"/>
+                <field name="model_id" string="關聯模型"/>
+                <filter name="my_docs"
+                        string="我的文件"
+                        domain="[('create_uid', '=', uid)]"/>
+                <filter name="collab_docs"
+                        string="我參與的文件"
+                        domain="[('collaborator_ids', 'in', [uid])]"/>
+                <separator/>
+                <filter name="format_a4"
+                        string="A4"
+                        domain="[('page_format', '=', 'A4')]"/>
+                <group expand="0" string="分組依據">
+                    <filter name="group_by_model"
+                            string="關聯模型"
+                            context="{'group_by': 'model_id'}"/>
+                    <filter name="group_by_format"
+                            string="頁面格式"
+                            context="{'group_by': 'page_format'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+</odoo>

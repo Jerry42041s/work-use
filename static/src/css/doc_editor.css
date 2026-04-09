@@ -1,0 +1,543 @@
+/* ================================================================
+   Dobtor Doc Editor — 主樣式表
+   ================================================================ */
+
+/* ─── 全螢幕容器 ─── */
+.o_action.o_dobtor_doc_editor {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+    background: #f0f0f0;
+}
+
+/* ─── 頂部工具列 ─── */
+.doc-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: #fff;
+    border-bottom: 1px solid #dee2e6;
+    flex-shrink: 0;
+    z-index: 100;
+    min-height: 44px;
+    white-space: nowrap;
+    overflow-x: auto;
+}
+
+.doc-toolbar-title {
+    font-size: 1rem;
+    font-weight: 600;
+    width: 200px;
+    max-width: 260px;
+    border: none;
+    outline: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: transparent;
+    flex-shrink: 1;
+}
+
+.doc-toolbar-title:hover,
+.doc-toolbar-title:focus {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.doc-toolbar-sep {
+    width: 1px;
+    height: 24px;
+    background: #dee2e6;
+    flex-shrink: 0;
+}
+
+.doc-toolbar-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: #495057;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.doc-toolbar-btn:hover {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+}
+
+.doc-toolbar-btn.primary {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}
+
+.doc-toolbar-btn.primary:hover {
+    background: #0b5ed7;
+}
+
+.doc-toolbar-btn.saving {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.doc-toolbar-select {
+    padding: 4px 8px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 0.875rem;
+    background: #fff;
+    cursor: pointer;
+}
+
+/* ─── 尺規 ─── */
+/* 外層容器：灰色背景（紙張外側） */
+.doc-ruler-wrap {
+    position: relative;
+    height: 24px;
+    background: #d8d8d8;
+    border-bottom: 1px solid #bbb;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+/* 紙張寬度的 track，置中對齊紙張（50% - paperWidth/2） */
+.doc-ruler-track {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 100%;
+    background: #f5f5f5;
+    border-left: 1px solid #bbb;
+    border-right: 1px solid #bbb;
+}
+
+.doc-ruler-tick {
+    position: absolute;
+    bottom: 0;
+    width: 1px;
+    background: #999;
+}
+
+.doc-ruler-tick.major {
+    height: 12px;
+    background: #555;
+}
+
+.doc-ruler-tick.minor {
+    height: 7px;
+}
+
+.doc-ruler-label {
+    position: absolute;
+    bottom: 13px;
+    font-size: 9px;
+    color: #555;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* ─── 編輯器工作區（可捲動灰底） ─── */
+.doc-workspace {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    padding: 24px 40px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #e8e8e8;
+    /* 不能設 overflow:hidden，否則 html_editor toolbar 會被剪裁 */
+    position: relative;
+}
+
+/* ─── 頁面紙張容器 ─── */
+.doc-page-sheet {
+    background: #fff;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+    margin: 0 auto 24px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+/* 寬度由 CSS mm 設定，高度由 JS pageStyle 動態注入 min-height px */
+.doc-page-sheet.format-A4     { width: 210mm; }
+.doc-page-sheet.format-A3     { width: 297mm; }
+.doc-page-sheet.format-A5     { width: 148mm; }
+.doc-page-sheet.format-letter,
+.doc-page-sheet.format-Letter { width: 215.9mm; }
+.doc-page-sheet.format-legal,
+.doc-page-sheet.format-Legal  { width: 215.9mm; }
+
+/* ─── 頁首區域（絕對定位至上邊距，不佔用內容空間） ─── */
+.doc-header-area {
+    border-bottom: 1px dashed #ccc;
+    overflow: hidden;
+    cursor: text;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.doc-header-area:hover {
+    background: rgba(248, 249, 250, 0.98);
+}
+
+/* ─── 頁尾區域（絕對定位至下邊距，不佔用內容空間） ─── */
+.doc-footer-area {
+    border-top: 1px dashed #ccc;
+    overflow: hidden;
+    cursor: text;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.doc-footer-area:hover {
+    background: rgba(248, 249, 250, 0.98);
+}
+
+.doc-header-label,
+.doc-footer-label {
+    position: absolute;
+    right: 4px;
+    top: 2px;
+    font-size: 10px;
+    color: #adb5bd;
+    letter-spacing: 0.5px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 頁首/頁尾提示文字 */
+.doc-hf-placeholder {
+    color: #adb5bd;
+    font-size: 0.8rem;
+    font-style: italic;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* ─── 主要編輯內容區 ─── */
+.doc-content-area {
+    flex: 1;
+    min-height: 200px;
+    outline: none;
+    position: relative;
+}
+
+/* ─── 縮放 wrapper ─── */
+.doc-workspace-zoom {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    transform-origin: top center;
+}
+
+/* ─── 內容容器：防止橫向溢出 ─── */
+.doc-content-wrapper {
+    position: relative;
+    overflow-x: hidden;   /* 防止內容橫向撐開頁面，但允許垂直增長 */
+    width: 100%;
+}
+
+/* html_editor 的 editable 樣式重置 + 自動換行 */
+.doc-content-area .odoo-editor-editable {
+    min-height: 200px;
+    padding: 0;
+    border: none;
+    outline: none;
+    box-shadow: none;
+    /* 自動換行：確保長字串/長數字在頁面寬度內折行 */
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+}
+
+/* 確保 html_editor toolbar 不被自訂 toolbar 蓋掉 */
+.o-we-toolbar {
+    z-index: 1050 !important;
+}
+
+/* Powerbox 下拉 */
+.o-we-powerbox {
+    z-index: 1050 !important;
+}
+
+/* ─── 頁首/頁尾 readonly projection ─── */
+.doc-hf-readonly {
+    min-height: 20px;
+    pointer-events: none;
+}
+
+
+/* ─── 視覺分頁帶（模擬紙張間的灰色空白，如 Google Docs 效果） ─── */
+.doc-page-break-visual {
+    position: absolute;
+    /* 延伸至 .doc-page-sheet 兩側外，填滿 workspace 背景寬度 */
+    left: -60px;
+    right: -60px;
+    height: 28px;
+    background: #f0f0f0;
+    /* 置中於斷點位置：帶子的中線對齊頁斷點 */
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 10;
+    /* 上下陰影模擬紙張邊緣 */
+    box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.10), 0 2px 5px rgba(0, 0, 0, 0.10);
+}
+
+.doc-page-break-label {
+    font-size: 0.7rem;
+    color: #adb5bd;
+    background: transparent;
+    padding: 0 8px;
+    white-space: nowrap;
+    user-select: none;
+}
+
+/* ─── DOM 分頁間隔（由 DocPageLayout 動態插入，不存入 DB） ─── */
+.doc-page-separator {
+    display: block !important;
+    overflow: visible;
+    cursor: default !important;
+    outline: none !important;
+}
+
+.doc-page-separator * {
+    user-select: none;
+    pointer-events: none;
+}
+
+/* ─── 頁數角標 ─── */
+.doc-page-count-badge {
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    font-size: 11px;
+    color: #adb5bd;
+    pointer-events: none;
+}
+
+/* ─── 離線提示徽章 ─── */
+.doc-toolbar-offline-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    color: #856404;
+}
+
+/* ─── Toolbar 浮動工具列下拉按鈕（字型/行高 Selector） ─── */
+.doc-toolbar-dropdown-btn {
+    font-size: 0.8rem;
+    padding: 2px 6px;
+    min-width: 80px;
+    white-space: nowrap;
+}
+
+/* ─── 多欄排版 ─── */
+.doc-column-section {
+    column-gap: 24px;
+}
+.doc-column-section[data-columns="2"] { column-count: 2; }
+.doc-column-section[data-columns="3"] { column-count: 3; }
+
+.doc-column-section > p,
+.doc-column-section > h1,
+.doc-column-section > h2,
+.doc-column-section > h3,
+.doc-column-section > h4,
+.doc-column-section > h5,
+.doc-column-section > h6 {
+    break-inside: avoid;
+}
+.doc-column-section > table { break-inside: avoid; }
+.doc-column-section > img   { break-inside: avoid; }
+.doc-column-section > h1,
+.doc-column-section > h2,
+.doc-column-section > h3 { break-after: avoid; }
+
+.doc-column-section:focus-within {
+    outline: 2px dashed #7c7bad;
+    outline-offset: 4px;
+    position: relative;
+}
+
+.doc-column-break {
+    break-before: column;
+    display: block;
+    width: 100%;
+    border-top: 1px dashed #ffc107;
+    margin: 4px 0;
+    position: relative;
+}
+.doc-column-break::after {
+    content: "── 換欄 ──";
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: #adb5bd;
+    white-space: nowrap;
+    background: #fff;
+    padding: 0 6px;
+}
+
+/* ─── 硬分頁標記（手動 Ctrl+Enter） ─── */
+.doc-page-break-hard {
+    display: block;
+    width: 100%;
+    border-top: 2px dashed #91caff;
+    margin: 8px 0;
+    position: relative;
+    page-break-after: always;
+    break-after: page;
+}
+.doc-page-break-hard::after {
+    content: "── 分頁符號 ──";
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    color: #91caff;
+    white-space: nowrap;
+    background: #fff;
+    padding: 0 8px;
+}
+
+/* ─── 分頁標記（舊版相容） ─── */
+.doc-page-break {
+    display: block;
+    width: 100%;
+    border-top: 2px dashed #6c757d;
+    margin: 12px 0;
+    position: relative;
+    page-break-after: always;
+    break-after: page;
+}
+
+.doc-page-break::after {
+    content: "── 分頁 ──";
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fff;
+    padding: 0 10px;
+    font-size: 11px;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+/* ─── 欄位變數 Token ─── */
+.doc-field-token {
+    display: inline-block;
+    background: #e3f2fd;
+    border: 1px solid #90caf9;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 0.85em;
+    color: #1565c0;
+    cursor: default;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.doc-field-token:hover {
+    background: #bbdefb;
+    border-color: #64b5f6;
+}
+
+/* ─── 頁面格式選擇器（Toolbar dropdown） ─── */
+.doc-page-format-picker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+}
+
+/* ─── 狀態列 ─── */
+.doc-statusbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 16px;
+    background: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    font-size: 11px;
+    color: #6c757d;
+    flex-shrink: 0;
+}
+
+.doc-statusbar-saved {
+    color: #198754;
+}
+
+.doc-statusbar-saving {
+    color: #fd7e14;
+}
+
+.doc-statusbar-error {
+    color: #dc3545;
+}
+
+/* ─── 列印樣式 ─── */
+@media print {
+    .doc-toolbar,
+    .doc-ruler-container,
+    .doc-statusbar {
+        display: none !important;
+    }
+
+    .doc-workspace {
+        padding: 0;
+        background: none;
+        overflow: visible;
+    }
+
+    .doc-page-sheet {
+        box-shadow: none;
+        margin: 0;
+        width: 100% !important;
+    }
+
+    .doc-page-break {
+        border: none;
+    }
+
+    .doc-page-break::after {
+        display: none;
+    }
+}
+
+/* ─── 響應式：小螢幕縮放 ─── */
+@media screen and (max-width: 900px) {
+    .doc-workspace {
+        padding: 12px;
+    }
+
+    .doc-page-sheet.format-A4,
+    .doc-page-sheet.format-A3,
+    .doc-page-sheet.format-letter,
+    .doc-page-sheet.format-legal {
+        width: 100%;
+        min-height: auto;
+    }
+}

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="dobtor_doc_editor.DocRuler">
+        <!-- 尺規：紙張寬度的 track 置中對齊（與工作區置中的紙張同步） -->
+        <div class="doc-ruler-wrap">
+            <div class="doc-ruler-track"
+                 t-attf-style="width: {{ paperWidthPx }}px;">
+                <t t-foreach="ticks" t-as="tick" t-key="tick.pos">
+                    <div class="doc-ruler-tick"
+                         t-att-class="tick.major ? 'major' : 'minor'"
+                         t-attf-style="left: {{ tick.px }}px;"/>
+                    <t t-if="tick.label !== null">
+                        <span class="doc-ruler-label"
+                              t-attf-style="left: {{ tick.px }}px;">
+                            <t t-esc="tick.label"/>
+                        </span>
+                    </t>
+                </t>
+            </div>
+        </div>
+    </t>
+</templates>

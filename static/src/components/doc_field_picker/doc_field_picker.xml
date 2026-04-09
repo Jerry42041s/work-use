@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="dobtor_doc_editor.DocFieldPickerDialog">
+        <Dialog title="'插入 Odoo 欄位'" size="'md'">
+            <t t-set-slot="default">
+                <!-- 搜尋框 -->
+                <div class="mb-2">
+                    <input class="form-control form-control-sm"
+                           type="text"
+                           placeholder="搜尋欄位名稱..."
+                           t-att-value="state.search"
+                           t-on-input="onSearchInput"/>
+                </div>
+
+                <!-- 載入中 -->
+                <t t-if="state.loading">
+                    <div class="text-center py-4 text-muted">
+                        <i class="fa fa-spinner fa-spin me-2"/>載入欄位中...
+                    </div>
+                </t>
+
+                <!-- 錯誤 -->
+                <t t-elif="state.error">
+                    <div class="alert alert-warning py-2">
+                        <i class="fa fa-exclamation-triangle me-2"/>
+                        <t t-esc="state.error"/>
+                    </div>
+                </t>
+
+                <!-- 欄位清單 -->
+                <t t-else="">
+                    <div class="doc-field-picker-list" style="max-height: 380px; overflow-y: auto;">
+                        <t t-if="filteredFields.length === 0">
+                            <div class="text-center py-3 text-muted">沒有符合的欄位</div>
+                        </t>
+                        <t t-foreach="filteredFields" t-as="field" t-key="field.name">
+                            <div class="doc-field-picker-row d-flex align-items-center justify-content-between py-1 px-2 border-bottom"
+                                 style="cursor: pointer;"
+                                 t-on-click="() => this.insertField(field.expression, field.label)">
+                                <div>
+                                    <span class="fw-semibold text-primary small" t-esc="field.label"/>
+                                    <span class="text-muted ms-2 small" t-esc="field.name"/>
+                                    <span class="badge bg-light text-secondary ms-1 small" t-esc="field.type"/>
+                                </div>
+                                <div class="d-flex align-items-center gap-2">
+                                    <code class="small text-success" t-esc="field.expression"/>
+                                    <!-- 展開子欄位（Many2one） -->
+                                    <t t-if="field.sub_fields and field.sub_fields.length">
+                                        <button class="btn btn-link btn-sm p-0 text-muted"
+                                                t-on-click.stop="() => this.toggleExpand(field.name)">
+                                            <i t-att-class="state.expanded.has(field.name) ? 'fa fa-chevron-up' : 'fa fa-chevron-down'"/>
+                                        </button>
+                                    </t>
+                                </div>
+                            </div>
+                            <!-- 子欄位展開 -->
+                            <t t-if="field.sub_fields and state.expanded.has(field.name)">
+                                <t t-foreach="field.sub_fields" t-as="sub" t-key="sub.name">
+                                    <div class="doc-field-picker-row d-flex align-items-center justify-content-between py-1 px-4 border-bottom bg-light"
+                                         style="cursor: pointer;"
+                                         t-on-click="() => this.insertSubField(field.name, sub)">
+                                        <div>
+                                            <i class="fa fa-level-right text-muted me-1"/>
+                                            <span class="text-secondary small" t-esc="sub.label"/>
+                                            <span class="text-muted ms-1 small" t-esc="'.' + sub.name"/>
+                                        </div>
+                                        <code class="small text-success">
+                                            {{ object.<t t-esc="field.name"/>.<t t-esc="sub.name"/> }}
+                                        </code>
+                                    </div>
+                                </t>
+                            </t>
+                        </t>
+                    </div>
+                </t>
+            </t>
+            <t t-set-slot="footer">
+                <button class="btn btn-secondary btn-sm" t-on-click="props.close">取消</button>
+            </t>
+        </Dialog>
+    </t>
+</templates>

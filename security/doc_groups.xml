@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data>
+        <!-- 模組分類 -->
+        <record id="module_category_doc_editor" model="ir.module.category">
+            <field name="name">文件編輯器</field>
+            <field name="description">Dobtor Doc Editor 模組的權限群組</field>
+            <field name="sequence">100</field>
+        </record>
+
+        <!-- 文件編輯者：可建立/編輯自己的文件，可讀取範本 -->
+        <record id="group_doc_editor" model="res.groups">
+            <field name="name">文件編輯者</field>
+            <field name="category_id" ref="module_category_doc_editor"/>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <!-- 文件管理者：完整存取所有文件與範本 -->
+        <record id="group_doc_manager" model="res.groups">
+            <field name="name">文件管理者</field>
+            <field name="category_id" ref="module_category_doc_editor"/>
+            <field name="implied_ids" eval="[(4, ref('dobtor_doc_editor.group_doc_editor'))]"/>
+            <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+        </record>
+    </data>
+</odoo>
