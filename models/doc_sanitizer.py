@@ -27,27 +27,46 @@ ALLOWED_ATTRIBUTES = {
     'th': ['colspan', 'rowspan', 'scope'],
     'col': ['span'],
     'colgroup': ['span'],
+    # 清單 HTML 屬性（LibreOffice 及自訂清單類型）
+    'ol': ['type', 'start'],
+    'ul': ['type'],
+    'li': ['value'],
     # 文件編輯器自訂屬性
     'span': ['data-expression', 'data-field', 'data-field-label', 'contenteditable'],
     'div': ['data-expression', 'data-field', 'data-field-label', 'contenteditable',
-            'data-page-break'],
+            'data-page-break', 'data-page', 'data-page-gap'],
 }
 
 # 允許的 CSS 屬性
 ALLOWED_CSS = {
     'color', 'background-color', 'font-size', 'font-family', 'font-weight',
     'font-style', 'text-align', 'text-decoration', 'line-height',
+    # 縮排與間距（LibreOffice 大量使用）
+    'text-indent', 'letter-spacing', 'word-spacing', 'text-transform',
     'margin', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right',
     'padding', 'padding-top', 'padding-bottom', 'padding-left', 'padding-right',
     'border', 'border-top', 'border-bottom', 'border-left', 'border-right',
     'border-collapse', 'border-spacing', 'border-color', 'border-style', 'border-width',
     'width', 'height', 'min-width', 'max-width', 'min-height',
     'display', 'vertical-align', 'white-space',
-    'page-break-before', 'page-break-after', 'break-before', 'break-after',
+    # 分頁控制
+    'page-break-before', 'page-break-after', 'page-break-inside',
+    'break-before', 'break-after', 'break-inside',
+    # 清單樣式
     'list-style-type', 'list-style', 'list-style-position', 'list-style-image',
+    # 多欄排版
+    'column-count', 'column-gap',
+    # 圖文混排
+    'float', 'clear',
+    # 版面
+    'box-sizing',
 }
 
-CSS_DANGEROUS = re.compile(r'(expression|javascript|vbscript|url)\s*\(', re.IGNORECASE)
+# 危險 CSS 模式：阻擋 expression/javascript/vbscript，以及非 data:image/ 的 url()
+CSS_DANGEROUS = re.compile(r'(expression|javascript|vbscript)\s*\(', re.IGNORECASE)
+# url() 需單獨判斷，允許 data:image/ 通過（用於 base64 圖片與 list-style-image）
+_CSS_URL = re.compile(r'url\s*\(', re.IGNORECASE)
+_CSS_SAFE_DATA_URL = re.compile(r'url\s*\(\s*["\']?\s*data:image/', re.IGNORECASE)
 
 
 class DocSanitizer(models.AbstractModel):
@@ -157,6 +176,13 @@ class DocSanitizer(models.AbstractModel):
                 continue
             prop, _, val = decl.partition(':')
             prop, val = prop.strip().lower(), val.strip()
-            if prop in ALLOWED_CSS and not CSS_DANGEROUS.search(val):
-                safe.append(f'{prop}: {val}')
+            if prop not in ALLOWED_CSS:
+                continue
+            # 阻擋一般危險模式
+            if CSS_DANGEROUS.search(val):
+                continue
+            # url() 特殊判斷：允許 data:image/，阻擋其他（包含 javascript:、外部 URL 等）
+            if _CSS_URL.search(val) and not _CSS_SAFE_DATA_URL.search(val):
+                continue
+            safe.append(f'{prop}: {val}')
         return '; '.join(safe)

@@ -541,3 +541,204 @@
         min-height: auto;
     }
 }
+
+
+/* ================================================================
+   多頁分頁架構（PaginationController）新增樣式
+   ================================================================ */
+
+/* ─── 編輯器舞台（灰色背景捲動容器）─── */
+.doc-editor-stage {
+    background: #e8e8e8;
+    overflow-y: auto;
+    overflow-x: auto;
+    padding: 24px 0 48px;
+    flex: 1;
+    /* 用於 .doc-page-count-badge 的 absolute 定位基準 */
+    position: relative;
+}
+
+/* ─── 頁首/頁尾外層容器（Stage 頂端/底端，對齊紙張）─── */
+.doc-hf-outer {
+    background: #f8f9fa;
+    border: 1px dashed #ced4da;
+    border-radius: 2px;
+    margin: 0 auto 16px;
+    min-height: 36px;
+    padding: 6px 12px;
+    position: relative;
+    cursor: text;
+    box-sizing: border-box;
+}
+.doc-hf-outer.doc-footer-outer {
+    margin-top: 16px;
+    margin-bottom: 0;
+}
+.doc-hf-outer:hover {
+    background: #f1f3f5;
+    border-color: #adb5bd;
+}
+.doc-hf-label {
+    position: absolute;
+    right: 6px;
+    top: 4px;
+    font-size: 10px;
+    color: #adb5bd;
+    pointer-events: none;
+    user-select: none;
+}
+
+/* ─── PaginationController 建立的 .doc-page-sheet（在 contenteditable 內）─── */
+/* 注意：JS 以 style 屬性直接設定尺寸，此處補充視覺樣式 */
+.odoo-editor-editable > .doc-page-sheet,
+[contenteditable="true"] > .doc-page-sheet {
+    display: block;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+    margin: 0 auto;
+    /* 取消頁面片段被選取時的外框干擾 */
+    outline: none !important;
+}
+
+/* ─── 頁間灰色間隔（.doc-page-gap，non-editable）─── */
+.odoo-editor-editable > .doc-page-gap,
+[contenteditable="true"] > .doc-page-gap {
+    display: block;
+    height: 32px;
+    background: transparent;  /* 顯示 stage 灰色背景 */
+    user-select: none;
+    pointer-events: none;
+    /* 延伸填滿 stage 全寬（視 stage 寬度而定）*/
+    position: relative;
+}
+
+/* ─── 主內容區（新架構）─── */
+.doc-content-area {
+    /* 讓 contenteditable 自由增長，PaginationController 管理高度 */
+    min-height: unset;
+}
+/* Wysiwyg editable 的背景（stage 灰底時顯示透明，page-sheet 負責白底）*/
+.doc-editor-stage .odoo-editor-editable {
+    background: transparent;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+/* ─── 字體大小輸入框（Toolbar）─── */
+.doc-font-size-wrapper {
+    gap: 0;
+}
+.doc-font-size-input {
+    font-size: 0.8rem;
+    height: 28px;
+    border-radius: 4px 0 0 4px;
+    border-right: none;
+}
+.doc-font-size-wrapper .btn {
+    height: 28px;
+    border-radius: 0 4px 4px 0;
+    padding: 0 6px;
+    border: 1px solid #dee2e6;
+    border-left: none;
+}
+
+/* ─── 列印樣式（新架構補充）─── */
+@media print {
+    .doc-editor-stage {
+        background: none;
+        padding: 0;
+    }
+    .doc-hf-outer {
+        background: none;
+        border: none;
+    }
+    .odoo-editor-editable > .doc-page-gap,
+    [contenteditable="true"] > .doc-page-gap {
+        display: none !important;
+    }
+    .odoo-editor-editable > .doc-page-sheet,
+    [contenteditable="true"] > .doc-page-sheet {
+        box-shadow: none;
+        margin: 0 !important;
+        width: 100% !important;
+        page-break-after: always;
+    }
+}
+
+
+/* ================================================================
+   表格強制收斂（防止匯入表格溢出頁面邊界）
+   ================================================================ */
+
+/* ─── 強制約束表格寬度，防止溢出頁面邊界 ─── */
+.doc-page-sheet table {
+    max-width: 100% !important;
+    width: 100% !important;
+    /* 強制瀏覽器依照容器寬度渲染，忽略內部過長內容的撐開效應 */
+    table-layout: fixed !important;
+    border-collapse: collapse;
+}
+
+/* 確保表格內的單元格內容自動換行，不會撐破欄寬 */
+.doc-page-sheet table td,
+.doc-page-sheet table th {
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    /* 針對沒有空白的極長字串（如：案號、連續英數字）強制折行 */
+    word-break: break-word !important;
+    white-space: normal !important;
+}
+
+/* 確保表格內的圖片也不會撐破單元格 */
+.doc-page-sheet table img {
+    max-width: 100% !important;
+    height: auto !important;
+}
+
+
+/* ================================================================
+   多層級清單（台灣公文格式：1. → (1) → a.）
+   ================================================================ */
+
+/* ─── 強制保護清單縮排（對抗 Odoo 預設 CSS 拔除 padding-left）─── */
+.doc-page-sheet ol,
+.doc-page-sheet ul,
+.doc-page-sheet td ol,
+.doc-page-sheet td ul {
+    padding-left: 2.5rem !important;
+    margin-bottom: 0.5rem;
+}
+
+/* ─── 第一層：標準數字 1. 2. 3. ─── */
+.doc-page-sheet ol {
+    list-style-type: decimal;
+}
+
+/* ─── 第二層：模擬帶括號的 (1) (2) (3) ─── */
+.doc-page-sheet ol ol {
+    list-style-type: none;      /* 關閉原生數字 */
+    counter-reset: tw-sub-counter;
+}
+.doc-page-sheet ol ol > li {
+    position: relative;
+}
+.doc-page-sheet ol ol > li::before {
+    counter-increment: tw-sub-counter;
+    content: "(" counter(tw-sub-counter) ")";
+    position: absolute;
+    left: -2rem;
+    width: 1.8rem;
+    text-align: right;
+    font-weight: normal;
+}
+
+/* ─── 第三層：小寫英文字母 a. b. c. ─── */
+.doc-page-sheet ol ol ol {
+    list-style-type: lower-alpha;
+}
+/* 關閉第二層 ::before 對第三層的繼承干擾 */
+.doc-page-sheet ol ol ol > li::before {
+    content: none;
+}

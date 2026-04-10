@@ -13,8 +13,10 @@ import { DocPageFormatPlugin } from "../../js/plugins/doc_page_format_plugin";
 import { DocExportPlugin } from "../../js/plugins/doc_export_plugin";
 import { DocMultiColumnPlugin } from "../../plugins/doc_multi_column_plugin";
 import { DocFontFamilyPlugin } from "../../plugins/doc_font_family_plugin";
+import { DocFontSizePlugin } from "../../plugins/doc_font_size_plugin";
 import { DocLineHeightPlugin } from "../../plugins/doc_line_height_plugin";
 import { DocTableMergePlugin } from "../../plugins/doc_table_merge_plugin";
+import { DocListTypePlugin } from "../../plugins/doc_list_type_plugin";
 import { AutoSaveManager } from "../../core/auto_save_manager";
 import { LeaderElection } from "../../core/leader_election";
 import { OfflineManager } from "../../core/offline_manager";
@@ -204,8 +206,10 @@ export class DocEditor extends Component {
                 DocExportPlugin,
                 DocMultiColumnPlugin,
                 DocFontFamilyPlugin,
+                DocFontSizePlugin,
                 DocLineHeightPlugin,
                 DocTableMergePlugin,
+                DocListTypePlugin,
             ],
             content: initialContent || "",
             onChange: (html) => this._onContentChange(html),
@@ -224,12 +228,41 @@ export class DocEditor extends Component {
 
     // ─── 內容變更 ─────────────────────────────────────────────────
 
-    _stripPageSeparators(html) {
-        if (!html || !html.includes('doc-page-separator')) return html;
+    /**
+     * 移除 layout 元素，回傳乾淨 HTML 以存入 DB：
+     * - .doc-page-separator（舊版視覺分頁線）
+     * - .doc-page-gap（新版頁間間隔，non-editable）
+     * - .doc-page-sheet（新版頁面容器，保留其內容）
+     */
+    _stripLayoutElements(html) {
+        if (!html) return html;
+        const hasLayout = html.includes('doc-page-separator') ||
+                          html.includes('doc-page-gap') ||
+                          html.includes('doc-page-sheet');
+        if (!hasLayout) return html;
+
         const tmp = document.createElement('div');
         tmp.innerHTML = html;
-        tmp.querySelectorAll('.doc-page-separator').forEach(el => el.remove());
+
+        // 移除 .doc-page-separator 與 .doc-page-gap
+        tmp.querySelectorAll('.doc-page-separator, .doc-page-gap').forEach(el => el.remove());
+
+        // 拆包 .doc-page-sheet（保留子節點，移除外層 div）
+        tmp.querySelectorAll('.doc-page-sheet').forEach(sheet => {
+            const parent = sheet.parentNode;
+            if (!parent) return;
+            while (sheet.firstChild) {
+                parent.insertBefore(sheet.firstChild, sheet);
+            }
+            parent.removeChild(sheet);
+        });
+
         return tmp.innerHTML;
+    }
+
+    // 保留舊名稱作為別名（向後相容，避免其他地方呼叫出錯）
+    _stripPageSeparators(html) {
+        return this._stripLayoutElements(html);
     }
 
     _onContentChange(html) {
@@ -237,8 +270,8 @@ export class DocEditor extends Component {
         if (this._importInProgress && !html.trim()) {
             return;
         }
-        // 移除 DOM 分頁間隔元素（不儲存至 DB）
-        this._currentContent = this._stripPageSeparators(html);
+        // 移除 layout 元素（不儲存至 DB）
+        this._currentContent = this._stripLayoutElements(html);
         if (this._offlineManager.isOnline) {
             this._autoSave.onContentChange(html);
         } else {

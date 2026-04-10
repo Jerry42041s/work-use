@@ -1,9 +1,9 @@
 /** @odoo-module **/
 
-import { Component, useState, useRef, useExternalListener, onMounted, onWillUnmount } from "@odoo/owl";
+import { Component, useState, useRef, useExternalListener, onMounted, onWillUnmount, onPatched } from "@odoo/owl";
 import { Wysiwyg } from "@html_editor/wysiwyg";
 import { MAIN_PLUGINS } from "@html_editor/plugin_sets";
-import { PaginationEngine } from "../../core/pagination_engine";
+import { PaginationController } from "../../core/pagination_engine";
 
 // 頁面尺寸 @ 96 dpi（px）
 const PAGE_SIZES = {
@@ -17,19 +17,16 @@ const PAGE_SIZES = {
 };
 
 /**
- * DocPageLayout — 頁面容器。
+ * DocPageLayout — 多頁文件容器。
  *
- * Google Docs 正確模型：
- * - 頁首/頁尾在「邊距區域」內（絕對定位），不佔用內容空間
- * - 預設 readonly（顯示 innerHTML）
- * - 雙擊進入 edit mode（掛載 Wysiwyg）
- * - 點擊外部退出 edit mode
- *
- * 結構：
- * .doc-page-sheet (position: relative; padding: marginTop...marginBottom)
- *   .doc-header-area  (position: absolute; top: 0; height: marginTop)
- *   .doc-content-wrapper (normal flow, fills full padding area)
- *   .doc-footer-area  (position: absolute; bottom: 0; height: marginBottom)
+ * 架構說明：
+ * - .doc-editor-stage（灰色背景）作為外層捲動容器
+ * - 頁首/頁尾：獨立的可編輯區塊，顯示在 stage 頂端/底端
+ * - 主內容：單一 Wysiwyg 編輯器，contenteditable 由 PaginationController 管理
+ * - PaginationController：在 contenteditable 內建立多個 .doc-page-sheet，
+ *   ResizeObserver（250ms debounce）偵測溢出並搬移 block 節點
+ * - Selection/Range 在節點搬移前後自動保存/恢復（確保游標不中斷）
+ * - Arrow Down/Up 自動跳過 .doc-page-gap
  */
 export class DocPageLayout extends Component {
     static template = "dobtor_doc_editor.DocPageLayout";
@@ -55,11 +52,11 @@ export class DocPageLayout extends Component {
         this.state = useState({
             editingHeader: false,
             editingFooter: false,
-            pageBreaks:    [],   // [{ pageIndex, topPx }]
-            totalPages:    1,
+            totalPages: 1,
         });
 
-        // 頁首/頁尾 Wysiwyg 設定由 getter 動態產生，確保每次掛載時取得最新 props.content
+        this._paginationCtrl = null;
+        this._initAttempts = 0;
 
         // 點擊頁首/頁尾外部時退出 edit mode
         useExternalListener(document, "mousedown", (ev) => {
@@ -77,20 +74,112 @@ export class DocPageLayout extends Component {
             }
         });
 
-        this._resizeObserver = null;
-        this._paginationEngine = null;
-        this._isRecalculating = false;
-
         onMounted(() => {
-            this._resizeObserver = new ResizeObserver(() => this._recalcPages());
-            if (this.contentRef.el) {
-                this._resizeObserver.observe(this.contentRef.el);
-            }
+            // 使用 rAF 等待 Wysiwyg DOM 完成初始化後，再建立 PaginationController
+            const tryInit = () => {
+                this._initAttempts++;
+                if (this._initAttempts > 50) return;  // 最多嘗試 50 次（約 800ms）
+
+                const el = this.contentRef.el;
+                if (!el) { requestAnimationFrame(tryInit); return; }
+
+                // 找到 Wysiwyg 建立的 contenteditable
+                const editable = el.querySelector('[contenteditable="true"]')
+                    || el.querySelector('.odoo-editor-editable');
+
+                if (!editable) {
+                    requestAnimationFrame(tryInit);
+                    return;
+                }
+
+                this._setupPaginationController(editable);
+            };
+            requestAnimationFrame(tryInit);
         });
 
         onWillUnmount(() => {
-            if (this._resizeObserver) this._resizeObserver.disconnect();
+            if (this._paginationCtrl) {
+                this._paginationCtrl.destroy();
+                this._paginationCtrl = null;
+            }
         });
+
+        // 當邊距 props 變化時（如匯入文件後），同步更新 PaginationController 的邊距值
+        // 並更新所有現有 sheet 的 CSS padding，觸發重新分頁。
+        // 若 history.reset 已移除 page sheets，_redistribute 的自我修復會以新邊距重建。
+        onPatched(() => {
+            if (!this._paginationCtrl) return;
+            const { marginTop, marginBottom, marginLeft, marginRight } = this.props;
+            const ctrl = this._paginationCtrl;
+            if (
+                ctrl.marginTop    !== marginTop    ||
+                ctrl.marginBottom !== marginBottom ||
+                ctrl.marginLeft   !== marginLeft   ||
+                ctrl.marginRight  !== marginRight
+            ) {
+                ctrl.marginTop    = marginTop;
+                ctrl.marginBottom = marginBottom;
+                ctrl.marginLeft   = marginLeft;
+                ctrl.marginRight  = marginRight;
+                ctrl.pageContentHeight = this.pageSize.height - marginTop - marginBottom;
+                const padding = `${marginTop}px ${marginRight}px ${marginBottom}px ${marginLeft}px`;
+                for (const sheet of ctrl._pages) {
+                    sheet.style.padding = padding;
+                }
+                ctrl._redistributeDebounced(0);
+            }
+        });
+    }
+
+    // ── PaginationController 初始化 ─────────────────────────────────────────
+
+    _setupPaginationController(editable) {
+        if (this._paginationCtrl) {
+            this._paginationCtrl.destroy();
+        }
+
+        const { width, height } = this.pageSize;
+
+        this._paginationCtrl = new PaginationController({
+            container: editable,
+            pageWidth: width,
+            pageHeight: height,
+            marginTop: this.props.marginTop,
+            marginBottom: this.props.marginBottom,
+            marginLeft: this.props.marginLeft,
+            marginRight: this.props.marginRight,
+        });
+
+        // 包裹現有內容至第一個 .doc-page-sheet，並開始分頁管理
+        this._paginationCtrl.wrapExistingContent();
+
+        // 頁數更新（PaginationController 管理）
+        this._paginationCtrl.onPagesChange = (count) => {
+            this.state.totalPages = count;
+        };
+    }
+
+    /**
+     * 當 editorConfig 或頁面格式變更時，重新初始化 PaginationController。
+     * 由 DocEditor 在必要時呼叫（如匯入完成後）。
+     */
+    reinitPagination() {
+        const el = this.contentRef.el;
+        if (!el) return;
+        const editable = el.querySelector('[contenteditable="true"]')
+            || el.querySelector('.odoo-editor-editable');
+        if (editable) this._setupPaginationController(editable);
+    }
+
+    /**
+     * 取得所有頁面的序列化 HTML（去除 layout 元素）。
+     * 供 DocEditor._onContentChange 使用。
+     */
+    getSerializedContent() {
+        if (this._paginationCtrl) {
+            return this._paginationCtrl.serialize();
+        }
+        return '';
     }
 
     // ── 頁首/頁尾 Wysiwyg 設定（getter 確保每次掛載時取用最新 props）──
@@ -117,7 +206,7 @@ export class DocPageLayout extends Component {
         };
     }
 
-    // ── 頁首/頁尾 edit mode ─────────────────────────────────────
+    // ── 頁首/頁尾 edit mode ─────────────────────────────────────────────────
 
     onHeaderDblClick() {
         this.state.editingHeader = true;
@@ -127,7 +216,7 @@ export class DocPageLayout extends Component {
         this.state.editingFooter = true;
     }
 
-    // ── 尺寸計算 ────────────────────────────────────────────────
+    // ── 尺寸計算 ─────────────────────────────────────────────────────────────
 
     get pageSize() {
         return PAGE_SIZES[this.props.pageFormat] || PAGE_SIZES.A4;
@@ -138,116 +227,21 @@ export class DocPageLayout extends Component {
         return mm[this.props.pageFormat] || 210;
     }
 
-    /** 紙張容器：relative + padding 形成邊距 + 固定最小頁面高度
-     *  不使用 flex：讓 .doc-content-wrapper 自然隨內容增長，頁面可超過一頁高度 */
-    get pageStyle() {
-        const { marginTop, marginRight, marginBottom, marginLeft } = this.props;
-        const { height } = this.pageSize;
-        return [
-            `position: relative`,
-            `padding: ${marginTop}px ${marginRight}px ${marginBottom}px ${marginLeft}px`,
-            `min-height: ${height}px`,
-            `box-sizing: border-box`,
-        ].join("; ");
+    /** 編輯器 stage 的寬度（略大於紙張，給兩側留白）*/
+    get stageStyle() {
+        const { width } = this.pageSize;
+        return `min-width: ${width + 128}px;`;
     }
 
-    /** 頁首絕對定位至上邊距區域 */
-    get headerStyle() {
-        const { marginTop, marginLeft, marginRight } = this.props;
+    /** 頁首/頁尾容器（固定寬度置中，對齊紙張）*/
+    get hfContainerStyle() {
+        const { width } = this.pageSize;
+        const { marginLeft, marginRight } = this.props;
         return [
-            `position: absolute`,
-            `top: 0`,
-            `left: 0`,
-            `right: 0`,
-            `height: ${marginTop}px`,
+            `width: ${width}px`,
+            `margin: 0 auto`,
             `padding: 4px ${marginRight}px 4px ${marginLeft}px`,
             `box-sizing: border-box`,
-        ].join("; ");
-    }
-
-    /** 頁尾絕對定位至下邊距區域 */
-    get footerStyle() {
-        const { marginBottom, marginLeft, marginRight } = this.props;
-        return [
-            `position: absolute`,
-            `bottom: 0`,
-            `left: 0`,
-            `right: 0`,
-            `height: ${marginBottom}px`,
-            `padding: 4px ${marginRight}px 4px ${marginLeft}px`,
-            `box-sizing: border-box`,
-        ].join("; ");
-    }
-
-    /** 使用 PaginationEngine 計算分頁，並以 DOM spacer 隔開各頁（避免 absolute 元素遮蓋內容） */
-    _recalcPages() {
-        if (this._isRecalculating) return;
-        this._isRecalculating = true;
-        try {
-            const el = this.contentRef.el;
-            if (!el) return;
-
-            const { height } = this.pageSize;
-            const pageContentH = height - this.props.marginTop - this.props.marginBottom;
-            if (pageContentH <= 0) return;
-
-            const editable = el.querySelector('[contenteditable="true"]')
-                || el.querySelector('.odoo-editor-editable')
-                || el;
-
-            // 1. 移除現有 separator（讓 PaginationEngine 看到純淨內容）
-            Array.from(editable.querySelectorAll('.doc-page-separator'))
-                .forEach(s => s.remove());
-
-            // 2. 惰性建立或重建 PaginationEngine
-            if (!this._paginationEngine ||
-                this._paginationEngine.pageContentHeight !== pageContentH) {
-                this._paginationEngine = new PaginationEngine({ pageContentHeight: pageContentH });
-            }
-
-            // 3. 計算分頁（PaginationEngine 會跳過 .doc-page-separator）
-            const pages = this._paginationEngine.computePageBreaks(editable);
-
-            if (pages.length <= 1) {
-                this.state.pageBreaks = [];
-                this.state.totalPages = 1;
-                return;
-            }
-
-            // 4. 在各頁起始 block 前插入視覺間隔 div
-            for (const p of pages.slice(1)) {
-                const sep = this._createPageSeparator(p.pageIndex);
-                if (p.blockRef && p.blockRef.parentNode === editable) {
-                    editable.insertBefore(sep, p.blockRef);
-                }
-            }
-
-            this.state.totalPages = pages.length;
-            this.state.pageBreaks = []; // DOM spacer 取代 absolute break visual
-        } finally {
-            this._isRecalculating = false;
-        }
-    }
-
-    /** 建立頁面間隔元素（contenteditable=false，不存入 DB） */
-    _createPageSeparator(pageIndex) {
-        const ml = this.props.marginLeft;
-        const mr = this.props.marginRight;
-        const sep = document.createElement('div');
-        sep.contentEditable = 'false';
-        sep.className = 'doc-page-separator';
-        sep.setAttribute('data-page-separator', 'true');
-        sep.style.cssText =
-            `height: 32px; ` +
-            `margin-left: -${ml}px; margin-right: -${mr}px; ` +
-            `background: #e8e8e8; ` +
-            `box-shadow: inset 0 4px 6px -4px rgba(0,0,0,0.15), ` +
-            `inset 0 -4px 6px -4px rgba(0,0,0,0.15); ` +
-            `user-select: none; pointer-events: none; position: relative;`;
-        sep.innerHTML =
-            `<span style="position:absolute;top:50%;left:50%;` +
-            `transform:translate(-50%,-50%);font-size:0.7rem;color:#999;` +
-            `white-space:nowrap;user-select:none;">第 ${pageIndex} 頁</span>`;
-        return sep;
+        ].join('; ');
     }
 }

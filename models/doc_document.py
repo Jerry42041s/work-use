@@ -335,10 +335,12 @@ class DocDocument(models.Model):
             'legal': ('215.9mm', '355.6mm'),
         }
         w, h = page_sizes.get(self.page_format, ('210mm', '297mm'))
-        mt = self.margin_top
-        mr = self.margin_right
-        mb = self.margin_bottom
-        ml = self.margin_left
+        # px → mm（96dpi：1px = 25.4/96 mm）
+        px_to_mm = 25.4 / 96
+        mt = round(self.margin_top    * px_to_mm, 1)
+        mr = round(self.margin_right  * px_to_mm, 1)
+        mb = round(self.margin_bottom * px_to_mm, 1)
+        ml = round(self.margin_left   * px_to_mm, 1)
 
         return f"""<!DOCTYPE html>
 <html>
@@ -347,7 +349,7 @@ class DocDocument(models.Model):
 <style>
 @page {{
     size: {w} {h};
-    margin: {mt}px {mr}px {mb}px {ml}px;
+    margin: {mt}mm {mr}mm {mb}mm {ml}mm;
 }}
 body {{
     font-family: 'Microsoft JhengHei', 'Noto Sans TC', 'Arial', sans-serif;
@@ -393,13 +395,56 @@ td, th {{ border: 1px solid #ccc; padding: 6px; }}
             [full_html],          # str，不預先 encode（_run_wkhtmltopdf 內部自行 encode）
             landscape=False,
             specific_paperformat_args={
-                'data-report-margin-top': self.margin_top,
-                'data-report-margin-bottom': self.margin_bottom,
-                'data-report-margin-left': self.margin_left,
-                'data-report-margin-right': self.margin_right,
+                # 全部物理邊距設 0，讓 @page CSS（已換算成 mm）完全控制邊距。
+                # top/bottom：Odoo 18 原生支援 data-report-margin-top/bottom 覆寫。
+                # left/right：Odoo 18 原始實作不支援，由本模組的 report_overrides.py
+                # 覆寫 _build_wkhtmltopdf_args 加入支援。
+                'data-report-margin-top':    0,
+                'data-report-margin-bottom': 0,
+                'data-report-margin-left':   0,
+                'data-report-margin-right':  0,
             },
         )
         return pdf_bytes
+
+    def _wrap_html_for_libreoffice(self, body_html):
+        """為 LibreOffice 建立最小化的標準 HTML 封裝。
+
+        包含 @page CSS 以確保 DOCX 邊距與螢幕上的 doc-page-sheet 一致。
+        注意：此 HTML 僅供 LibreOffice 中介轉換，不會存入 DB 或顯示給使用者。
+        """
+        px_to_mm = 25.4 / 96
+        page_sizes = {
+            'A4':     ('210mm',   '297mm'),
+            'A3':     ('297mm',   '420mm'),
+            'A5':     ('148mm',   '210mm'),
+            'letter': ('215.9mm', '279.4mm'),
+            'legal':  ('215.9mm', '355.6mm'),
+        }
+        w, h = page_sizes.get(self.page_format, ('210mm', '297mm'))
+        mt = round(self.margin_top    * px_to_mm, 1)
+        mr = round(self.margin_right  * px_to_mm, 1)
+        mb = round(self.margin_bottom * px_to_mm, 1)
+        ml = round(self.margin_left   * px_to_mm, 1)
+        # LibreOffice 的 width:100% 以頁面寬度扣除 LO 自身預設邊距（約 5mm+5mm）計算，
+        # 與 @page margin 無關，故改用明確的可用寬度避免表格溢出。
+        usable_w_mm = round(float(w[:-2]) - ml - mr, 1)
+        return f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+@page {{ size: {w} {h}; margin: {mt}mm {mr}mm {mb}mm {ml}mm; }}
+body {{ font-family: sans-serif; }}
+table {{ border-collapse: collapse; width: {usable_w_mm}mm; max-width: {usable_w_mm}mm; table-layout: fixed; }}
+td, th {{ border: 1px solid black; padding: 4px; word-break: break-word; overflow-wrap: break-word; }}
+img {{ max-width: 100%; height: auto; }}
+</style>
+</head>
+<body>
+{body_html}
+</body>
+</html>"""
 
     def _generate_docx_via_libreoffice(self, record=None):
         """使用 LibreOffice headless 將 HTML 轉換為 DOCX。
@@ -415,16 +460,25 @@ td, th {{ border: 1px solid #ccc; padding: 6px; }}
         if record:
             body = self._render_template(body, record)
 
-        full_html = self._build_full_html(rendered_body=body)
+        # 使用專為 LibreOffice 設計的最小化 HTML 封裝
+        # （不用 _build_full_html，避免 @page CSS 觸發 LO MIME 誤判）
+        lo_html = self._wrap_html_for_libreoffice(body)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             html_path = os.path.join(tmpdir, 'input.html')
             with open(html_path, 'w', encoding='utf-8') as f:
-                f.write(full_html)
+                f.write(lo_html)
 
             result = subprocess.run(
-                ['soffice', '--headless', '--norestore',
-                 '--convert-to', 'docx', '--outdir', tmpdir, html_path],
+                [
+                    'soffice', '--headless', '--norestore',
+                    # .html 副檔名已足夠讓 LO 識別輸入格式（不需 --infilter）
+                    # 'MS Word 2007 XML' 是 LO 的 DOCX export filter 正式名稱，
+                    # 明確指定可防止 LO 找不到 export filter 而失敗
+                    '--convert-to', 'docx:MS Word 2007 XML',
+                    '--outdir', tmpdir,
+                    html_path,
+                ],
                 capture_output=True,
                 timeout=60,
             )
@@ -435,7 +489,18 @@ td, th {{ border: 1px solid #ccc; padding: 6px; }}
 
             docx_path = os.path.join(tmpdir, 'input.docx')
             if not os.path.exists(docx_path):
-                raise UserError('LibreOffice 轉換後找不到輸出檔案。')
+                # LO 有時以原始檔名為基礎產生輸出，嘗試搜尋
+                candidates = [
+                    f for f in os.listdir(tmpdir)
+                    if f.endswith('.docx')
+                ]
+                if candidates:
+                    docx_path = os.path.join(tmpdir, candidates[0])
+                else:
+                    raise UserError(
+                        'LibreOffice 轉換後找不到輸出檔案。'
+                        f'（stderr: {result.stderr.decode("utf-8", errors="replace")[:500]}）'
+                    )
 
             with open(docx_path, 'rb') as f:
                 return f.read()

@@ -43,4 +43,56 @@
         </Dropdown>
     </t>
 
+
+    <!-- ── 字體大小輸入框（保留 pt 單位）── -->
+    <t t-name="dobtor_doc_editor.FontSizeInput">
+        <div class="d-flex align-items-center doc-font-size-wrapper">
+            <input
+                type="text"
+                class="form-control form-control-sm doc-font-size-input"
+                t-att-value="state.displayValue"
+                t-on-change="onInputChange"
+                t-on-keydown="onInputKeydown"
+                style="width: 58px; text-align: center;"
+                title="字體大小（如：11pt、14px）"
+                placeholder="pt"
+            />
+            <Dropdown>
+                <button class="btn btn-light btn-sm px-1" title="選擇大小">
+                    <i class="fa fa-caret-down"/>
+                </button>
+                <t t-set-slot="content">
+                    <t t-foreach="items" t-as="ptSize" t-key="ptSize_index">
+                        <DropdownItem
+                            onSelected="() => this.onSelected(ptSize)"
+                            t-on-pointerdown.prevent="() => {}">
+                            <span t-esc="ptSize"/> pt
+                        </DropdownItem>
+                    </t>
+                </t>
+            </Dropdown>
+        </div>
+    </t>
+
+    <!-- ── 清單類型選擇器（Dropdown + DropdownItem） ── -->
+    <t t-name="dobtor_doc_editor.ListTypeSelector">
+        <Dropdown>
+            <button class="btn btn-light btn-sm doc-toolbar-dropdown-btn"
+                    title="清單類型">
+                <i class="fa fa-list-ol me-1"/>
+                <span class="px-1">清單</span>
+                <i class="fa fa-caret-down ms-1"/>
+            </button>
+            <t t-set-slot="content">
+                <t t-foreach="items" t-as="item" t-key="item_index">
+                    <DropdownItem
+                        onSelected="() => this.onSelected(item)"
+                        t-on-pointerdown.prevent="() => {}">
+                        <span t-esc="item.name"/>
+                    </DropdownItem>
+                </t>
+            </t>
+        </Dropdown>
+    </t>
+
 </templates>

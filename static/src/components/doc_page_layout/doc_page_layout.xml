@@ -2,21 +2,20 @@
 <templates xml:space="preserve">
     <t t-name="dobtor_doc_editor.DocPageLayout">
         <!--
-            頁面紙張容器（Google Docs 模型）：
-            - position: relative + padding 形成邊距空間
-            - 頁首/頁尾：絕對定位至邊距區域，不佔用內容空間
-            - 內容區：填滿 padding 後的可用空間
+            多頁文件容器（新架構）：
+            - .doc-editor-stage：灰色背景捲動區
+            - 頁首/頁尾：Stage 頂端/底端的獨立可編輯區
+            - 主內容：Wysiwyg 掛載於 .doc-content-area，
+              PaginationController 在 contenteditable 內動態建立 .doc-page-sheet
         -->
-        <div class="doc-page-sheet"
-             t-att-class="'format-' + props.pageFormat"
-             t-att-style="pageStyle">
+        <div class="doc-editor-stage" t-att-style="stageStyle">
 
-            <!-- 頁首（絕對定位至上邊距）：預設 readonly，雙擊進入 edit mode -->
-            <div class="doc-header-area"
-                 t-att-style="headerStyle"
+            <!-- ── 頁首（stage 頂端，對齊紙張寬度）── -->
+            <div class="doc-hf-outer doc-header-outer"
+                 t-att-style="hfContainerStyle"
                  t-ref="headerArea"
                  t-on-dblclick="onHeaderDblClick">
-                <span class="doc-header-label">頁首</span>
+                <span class="doc-hf-label doc-header-label">頁首</span>
                 <t t-if="state.editingHeader">
                     <Wysiwyg config="headerEditorConfig"/>
                 </t>
@@ -28,30 +27,19 @@
                 </t>
             </div>
 
-            <!-- 視覺分頁線（相對於 .doc-page-sheet，topPx 已含 marginTop 偏移） -->
-            <t t-foreach="state.pageBreaks" t-as="bp" t-key="bp.pageIndex">
-                <div class="doc-page-break-visual"
-                     t-attf-style="top: {{ bp.topPx }}px;">
-                    <span class="doc-page-break-label">第 <t t-esc="bp.pageIndex"/> 頁</span>
-                </div>
-            </t>
-
-            <!-- 主要內容區 -->
-            <div class="doc-content-wrapper">
-                <!-- 主要內容編輯區 -->
-                <div class="doc-content-area" t-ref="pageContent">
-                    <t t-if="props.editorConfig">
-                        <Wysiwyg config="props.editorConfig"/>
-                    </t>
-                </div>
+            <!-- ── 主內容區（PaginationController 在此建立多個 .doc-page-sheet）── -->
+            <div class="doc-content-area" t-ref="pageContent">
+                <t t-if="props.editorConfig">
+                    <Wysiwyg config="props.editorConfig"/>
+                </t>
             </div>
 
-            <!-- 頁尾（絕對定位至下邊距）：預設 readonly，雙擊進入 edit mode -->
-            <div class="doc-footer-area"
-                 t-att-style="footerStyle"
+            <!-- ── 頁尾（stage 底端，對齊紙張寬度）── -->
+            <div class="doc-hf-outer doc-footer-outer"
+                 t-att-style="hfContainerStyle"
                  t-ref="footerArea"
                  t-on-dblclick="onFooterDblClick">
-                <span class="doc-footer-label">頁尾</span>
+                <span class="doc-hf-label doc-footer-label">頁尾</span>
                 <t t-if="state.editingFooter">
                     <Wysiwyg config="footerEditorConfig"/>
                 </t>
@@ -63,7 +51,7 @@
                 </t>
             </div>
 
-            <!-- 頁數角標（右下角） -->
+            <!-- ── 頁數角標（右下角）── -->
             <t t-if="state.totalPages > 1">
                 <div class="doc-page-count-badge">
                     共 <t t-esc="state.totalPages"/> 頁

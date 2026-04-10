@@ -53,8 +53,10 @@ Dobtor Doc Editor v2.1
             'dobtor_doc_editor/static/src/js/plugins/doc_export_plugin.js',
             'dobtor_doc_editor/static/src/plugins/doc_multi_column_plugin.js',
             'dobtor_doc_editor/static/src/plugins/doc_font_family_plugin.js',
+            'dobtor_doc_editor/static/src/plugins/doc_font_size_plugin.js',
             'dobtor_doc_editor/static/src/plugins/doc_line_height_plugin.js',
             'dobtor_doc_editor/static/src/plugins/doc_table_merge_plugin.js',
+            'dobtor_doc_editor/static/src/plugins/doc_list_type_plugin.js',
             'dobtor_doc_editor/static/src/plugins/doc_formatting_plugins.xml',
             # Components（依賴順序）
             'dobtor_doc_editor/static/src/components/doc_field_picker/doc_field_picker.xml',
