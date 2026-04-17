@@ -150,25 +150,46 @@ export class DocFontSizePlugin extends Plugin {
         if (/^\d+(\.\d+)?$/.test(normalized)) normalized += "pt";
         if (normalized === "pt") return;
 
-        const docSel = window.getSelection();
-        if (!docSel || docSel.rangeCount === 0) return;
-        const range = docSel.getRangeAt(0);
+        // 使用 Odoo selection dependency 取得編輯器的選取狀態。
+        // 直接用 window.getSelection() 在 toolbar dropdown 點擊後會遺失，
+        // getEditableSelection() 由編輯器獨立維護，不受 toolbar 互動影響。
+        const editableSel = this.dependencies.selection.getEditableSelection?.();
+        if (!editableSel?.anchorNode) return;
 
-        if (range.collapsed) {
-            // 游標位置：直接對父元素設定（DOM mutation 自動被 MutationObserver 記錄）
-            let el = range.startContainer;
+        const isCollapsed = editableSel.isCollapsed ??
+            (editableSel.anchorNode === editableSel.focusNode &&
+             editableSel.anchorOffset === editableSel.focusOffset);
+
+        if (isCollapsed) {
+            // 游標位置：對父元素設定字體大小
+            let el = editableSel.anchorNode;
             if (el.nodeType === 3) el = el.parentElement;
             if (el) el.style.fontSize = normalized;
         } else {
             // 有選取範圍：用 <span> 包裹選取文字
-            const span = this.document.createElement("span");
-            span.style.fontSize = normalized;
             try {
-                range.surroundContents(span);
-            } catch (e) {
-                // 跨 block 選取（surroundContents 限制）：對 commonAncestor 設定
-                const ancestor = range.commonAncestorContainer;
-                const el = ancestor.nodeType === 3 ? ancestor.parentElement : ancestor;
+                const range = this.document.createRange();
+                range.setStart(editableSel.anchorNode, editableSel.anchorOffset);
+                range.setEnd(editableSel.focusNode, editableSel.focusOffset);
+                // 處理反向選取（backward selection）
+                if (range.collapsed) {
+                    range.setStart(editableSel.focusNode, editableSel.focusOffset);
+                    range.setEnd(editableSel.anchorNode, editableSel.anchorOffset);
+                }
+                const span = this.document.createElement("span");
+                span.style.fontSize = normalized;
+                try {
+                    range.surroundContents(span);
+                } catch {
+                    // 跨 block 選取（surroundContents 限制）：對 commonAncestor 設定
+                    const ancestor = range.commonAncestorContainer;
+                    const el = ancestor.nodeType === 3 ? ancestor.parentElement : ancestor;
+                    if (el) el.style.fontSize = normalized;
+                }
+            } catch {
+                // Range 建立失敗：fallback 至 anchorNode 的父元素
+                let el = editableSel.anchorNode;
+                if (el.nodeType === 3) el = el.parentElement;
                 if (el) el.style.fontSize = normalized;
             }
         }

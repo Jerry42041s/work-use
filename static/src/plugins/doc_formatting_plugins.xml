@@ -64,7 +64,7 @@
                 <t t-set-slot="content">
                     <t t-foreach="items" t-as="ptSize" t-key="ptSize_index">
                         <DropdownItem
-                            onSelected="() => this.onSelected(ptSize)"
+                            onSelected="() => this.onDropdownSelected(ptSize)"
                             t-on-pointerdown.prevent="() => {}">
                             <span t-esc="ptSize"/> pt
                         </DropdownItem>

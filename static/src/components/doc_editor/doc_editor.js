@@ -464,7 +464,12 @@ export class DocEditor extends Component {
 
                 this.state.statusMsg = "已儲存";
                 this.state.statusType = "saved";
-                this.notification.add("匯入成功", { type: "success" });
+                this.notification.add("匯入成功，正在重新整理畫面...", { type: "success" });
+
+                // 重新載入頁面確保 Pagination 引擎乾淨掛載，避免 DOM 狀態不同步
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500);
             } else {
                 this.state.statusMsg = "就緒";
                 this.state.statusType = "saved";

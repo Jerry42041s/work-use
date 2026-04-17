@@ -660,8 +660,11 @@ def _lo_postprocess(raw_html):
                     extras.append(p)
             if extras:
                 existing  = (el.get('style') or '').strip('; ')
-                new_style = '; '.join(extras)
-                el.set('style', (existing + '; ' + new_style).strip('; ')
+                # reversed(extras)：class 屬性中「第一個 class」排在字串末尾，
+                # 使其在重複屬性時優先（CSS last-wins 語意）。
+                # existing 放最後：原始 inline style 最優先（模擬 inline > class 層級）。
+                new_style = '; '.join(reversed(extras))
+                el.set('style', (new_style + '; ' + existing).strip('; ')
                                 if existing else new_style)
             del el.attrib['class']
 

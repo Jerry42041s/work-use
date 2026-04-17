@@ -1,5 +1,6 @@
 import base64
 import io
+import re
 import subprocess
 import tempfile
 import os
@@ -113,6 +114,115 @@ def _html_node_to_docx(doc, node):
 
 # 超過此大小（bytes）自動存入 ir.attachment
 CONTENT_SIZE_THRESHOLD = 500 * 1024  # 500 KB
+
+import logging
+_logger = logging.getLogger(__name__)
+
+
+def _fix_docx_table_widths(docx_bytes, usable_w_mm):
+    """修正 LibreOffice 生成的 DOCX 中所有表格寬度（含巢狀），使其符合頁面可用寬度。
+
+    LO 24.2 以內建預設邊距（~5mm）計算表格寬，導致表格寬 200mm 而版心只有 170mm。
+    CSS / inline style / !important 全部無效；唯一可靠解法是在 OOXML 層直接修正。
+
+    修改範圍（三層同步）：
+    1. <w:tblGrid> / <w:gridCol> — 欄寬網格（等比縮放）
+    2. <w:tblW>                  — 表格總寬（設為 target_twips, type=dxa）
+    3. <w:tcW>                   — 儲存格寬度（type=dxa 者等比縮放）
+
+    失敗保護：任何異常回傳原始 bytes（優雅降級，確保使用者至少能下載檔案）。
+    """
+    try:
+        from lxml import etree
+        import zipfile
+
+        WNS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+        def W(tag):
+            return f'{{{WNS}}}{tag}'
+
+        # mm → twips（1 inch = 1440 twips；1 inch = 25.4 mm）
+        target_twips = round(usable_w_mm * 1440 / 25.4)
+
+        # 只讀取 document.xml，其餘 DOCX 內容不解析（省記憶體）
+        with zipfile.ZipFile(io.BytesIO(docx_bytes)) as zin:
+            doc_xml_bytes = zin.read('word/document.xml')
+
+        root = etree.fromstring(doc_xml_bytes)
+
+        # 找出所有 w:tbl（含巢狀），lxml 的 findall 以文件順序回傳（前序）
+        all_tbls = root.findall(f'.//{W("tbl")}')
+
+        for tbl in all_tbls:
+            # ── Step 1: 讀取並等比縮放 <w:tblGrid> ──────────────────────────
+            tbl_grid = tbl.find(W('tblGrid'))
+            grid_cols = tbl_grid.findall(W('gridCol')) if tbl_grid is not None else []
+
+            current_total = (
+                sum(int(c.get(W('w'), 0)) for c in grid_cols)
+                if grid_cols else 0
+            )
+
+            # current_total 為 0（空表格）或已在合理範圍（±2%）則跳過
+            if current_total <= 0:
+                continue
+            if abs(current_total - target_twips) / target_twips < 0.02:
+                continue
+
+            scale = target_twips / current_total
+
+            # 等比縮放 gridCol，最後一欄補足捨入誤差
+            total_assigned = 0
+            for i, col in enumerate(grid_cols):
+                if i < len(grid_cols) - 1:
+                    new_w = max(1, round(int(col.get(W('w'), 0)) * scale))
+                else:
+                    new_w = max(1, target_twips - total_assigned)
+                col.set(W('w'), str(new_w))
+                total_assigned += new_w
+
+            # ── Step 2: 修正 <w:tblW> ────────────────────────────────────────
+            tbl_pr = tbl.find(W('tblPr'))
+            if tbl_pr is not None:
+                tbl_w = tbl_pr.find(W('tblW'))
+                if tbl_w is None:
+                    tbl_w = etree.SubElement(tbl_pr, W('tblW'))
+                tbl_w.set(W('w'), str(target_twips))
+                tbl_w.set(W('type'), 'dxa')
+
+            # ── Step 3: 等比縮放所有 <w:tcW>（type=dxa）──────────────────────
+            for tc in tbl.iter(W('tc')):
+                tc_pr = tc.find(W('tcPr'))
+                if tc_pr is None:
+                    continue
+                tc_w = tc_pr.find(W('tcW'))
+                if tc_w is None or tc_w.get(W('type')) != 'dxa':
+                    continue
+                old_w = int(tc_w.get(W('w'), 0))
+                if old_w <= 0:
+                    continue
+                tc_w.set(W('w'), str(max(1, round(old_w * scale))))
+
+        # ── 重新打包 DOCX（只替換 document.xml，其餘保持原樣）────────────────
+        modified_xml = etree.tostring(
+            root, xml_declaration=True, encoding='UTF-8', standalone=True
+        )
+        output = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(docx_bytes)) as zin:
+            with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    data = (
+                        modified_xml
+                        if item.filename == 'word/document.xml'
+                        else zin.read(item.filename)
+                    )
+                    zout.writestr(item, data)
+        output.seek(0)
+        return output.read()
+
+    except Exception as e:
+        _logger.warning('[DocEditor] _fix_docx_table_widths 失敗，回傳原始 DOCX: %s', e)
+        return docx_bytes  # 優雅降級：確保使用者至少可下載（邊距可能有誤但檔案可開啟）
 
 
 class DocDocument(models.Model):
@@ -335,12 +445,6 @@ class DocDocument(models.Model):
             'legal': ('215.9mm', '355.6mm'),
         }
         w, h = page_sizes.get(self.page_format, ('210mm', '297mm'))
-        # px → mm（96dpi：1px = 25.4/96 mm）
-        px_to_mm = 25.4 / 96
-        mt = round(self.margin_top    * px_to_mm, 1)
-        mr = round(self.margin_right  * px_to_mm, 1)
-        mb = round(self.margin_bottom * px_to_mm, 1)
-        ml = round(self.margin_left   * px_to_mm, 1)
 
         return f"""<!DOCTYPE html>
 <html>
@@ -349,7 +453,6 @@ class DocDocument(models.Model):
 <style>
 @page {{
     size: {w} {h};
-    margin: {mt}mm {mr}mm {mb}mm {ml}mm;
 }}
 body {{
     font-family: 'Microsoft JhengHei', 'Noto Sans TC', 'Arial', sans-serif;
@@ -391,18 +494,19 @@ td, th {{ border: 1px solid #ccc; padding: 6px; }}
 
         full_html = self._build_full_html(rendered_body=body)
         Report = self.env['ir.actions.report']
+        # px → mm（96dpi：1px = 25.4/96 mm）
+        px_to_mm = 25.4 / 96
         pdf_bytes = Report._run_wkhtmltopdf(
             [full_html],          # str，不預先 encode（_run_wkhtmltopdf 內部自行 encode）
             landscape=False,
             specific_paperformat_args={
-                # 全部物理邊距設 0，讓 @page CSS（已換算成 mm）完全控制邊距。
-                # top/bottom：Odoo 18 原生支援 data-report-margin-top/bottom 覆寫。
-                # left/right：Odoo 18 原始實作不支援，由本模組的 report_overrides.py
-                # 覆寫 _build_wkhtmltopdf_args 加入支援。
-                'data-report-margin-top':    0,
-                'data-report-margin-bottom': 0,
-                'data-report-margin-left':   0,
-                'data-report-margin-right':  0,
+                # 傳入實際 mm 值，由 wkhtmltopdf CLI 套用正確邊距。
+                # @page CSS 只保留 size，避免 CSS margin 與 CLI margin 疊加。
+                # left/right 需依賴本模組 report_overrides.py 覆寫的支援。
+                'data-report-margin-top':    round(self.margin_top    * px_to_mm, 1),
+                'data-report-margin-bottom': round(self.margin_bottom * px_to_mm, 1),
+                'data-report-margin-left':   round(self.margin_left   * px_to_mm, 1),
+                'data-report-margin-right':  round(self.margin_right  * px_to_mm, 1),
             },
         )
         return pdf_bytes
@@ -413,31 +517,33 @@ td, th {{ border: 1px solid #ccc; padding: 6px; }}
         包含 @page CSS 以確保 DOCX 邊距與螢幕上的 doc-page-sheet 一致。
         注意：此 HTML 僅供 LibreOffice 中介轉換，不會存入 DB 或顯示給使用者。
         """
-        px_to_mm = 25.4 / 96
-        page_sizes = {
-            'A4':     ('210mm',   '297mm'),
-            'A3':     ('297mm',   '420mm'),
-            'A5':     ('148mm',   '210mm'),
-            'letter': ('215.9mm', '279.4mm'),
-            'legal':  ('215.9mm', '355.6mm'),
+        # px → cm（96dpi：1px = 2.54/96 cm）
+        px_to_cm = 2.54 / 96
+        page_sizes_cm = {
+            'A4':     (21.0,   29.7),
+            'A3':     (29.7,   42.0),
+            'A5':     (14.8,   21.0),
+            'letter': (21.59,  27.94),
+            'Letter': (21.59,  27.94),
+            'legal':  (21.59,  35.56),
+            'Legal':  (21.59,  35.56),
         }
-        w, h = page_sizes.get(self.page_format, ('210mm', '297mm'))
-        mt = round(self.margin_top    * px_to_mm, 1)
-        mr = round(self.margin_right  * px_to_mm, 1)
-        mb = round(self.margin_bottom * px_to_mm, 1)
-        ml = round(self.margin_left   * px_to_mm, 1)
-        # LibreOffice 的 width:100% 以頁面寬度扣除 LO 自身預設邊距（約 5mm+5mm）計算，
-        # 與 @page margin 無關，故改用明確的可用寬度避免表格溢出。
-        usable_w_mm = round(float(w[:-2]) - ml - mr, 1)
-        return f"""<!DOCTYPE html>
-<html>
+        w_cm, h_cm = page_sizes_cm.get(self.page_format, (21.0, 29.7))
+        mt = round(self.margin_top    * px_to_cm, 2)
+        mr = round(self.margin_right  * px_to_cm, 2)
+        mb = round(self.margin_bottom * px_to_cm, 2)
+        ml = round(self.margin_left   * px_to_cm, 2)
+        usable_w_cm = round(w_cm - ml - mr, 2)
+        return f"""<html xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:w="urn:schemas-microsoft-com:office:word"
+  xmlns="http://www.w3.org/TR/REC-html40">
 <head>
 <meta charset="utf-8">
 <style>
-@page {{ size: {w} {h}; margin: {mt}mm {mr}mm {mb}mm {ml}mm; }}
-body {{ font-family: sans-serif; }}
-table {{ border-collapse: collapse; width: {usable_w_mm}mm; max-width: {usable_w_mm}mm; table-layout: fixed; }}
-td, th {{ border: 1px solid black; padding: 4px; word-break: break-word; overflow-wrap: break-word; }}
+@page {{ size: {w_cm}cm {h_cm}cm; margin: {mt}cm {mr}cm {mb}cm {ml}cm; }}
+body {{ font-family: sans-serif; max-width: {usable_w_cm}cm; margin: 0 auto; }}
+table {{ border-collapse: collapse; }}
+td, th {{ border: 1px solid black; padding: 4px; word-break: break-word; }}
 img {{ max-width: 100%; height: auto; }}
 </style>
 </head>
@@ -503,7 +609,18 @@ img {{ max-width: 100%; height: auto; }}
                     )
 
             with open(docx_path, 'rb') as f:
-                return f.read()
+                raw_bytes = f.read()
+
+        # 後處理：修正 LO 以內建預設邊距計算的表格寬度（200mm → 實際版心寬度）
+        px_to_mm = 25.4 / 96
+        page_w_map = {
+            'A4': 210, 'A3': 297, 'A5': 148,
+            'letter': 215.9, 'Letter': 215.9,
+            'legal': 215.9, 'Legal': 215.9,
+        }
+        w_mm = page_w_map.get(self.page_format, 210)
+        usable_mm = w_mm - (self.margin_left * px_to_mm) - (self.margin_right * px_to_mm)
+        return _fix_docx_table_widths(raw_bytes, usable_mm)
 
     def _generate_docx_via_python(self, record=None):
         """使用 python-docx + lxml 將 HTML 轉換為 DOCX（LibreOffice 不可用時的 fallback）。"""
